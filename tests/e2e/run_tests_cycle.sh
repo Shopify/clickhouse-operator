@@ -1,5 +1,5 @@
 #!/bin/bash
-
+ 
 start=`date`
 runs=1
 echo "start run $runs"
