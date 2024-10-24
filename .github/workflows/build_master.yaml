@@ -8,7 +8,7 @@ on:
 jobs:
   build_master:
     name: Build master
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24
     steps:
       - name: Checkout project
         uses: actions/checkout@v3
