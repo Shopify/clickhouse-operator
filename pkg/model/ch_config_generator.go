@@ -32,6 +32,7 @@ const (
 	// 2. Cluster with all shards (1 replica). Used to gather/scatter data over all replicas.
 	oneShardAllReplicasClusterName = "all-replicated"
 	allShardsOneReplicaClusterName = "all-sharded"
+	allShardsClusterName           = "all-shards"
 )
 
 // ClickHouseConfigGenerator generates ClickHouse configuration files content for specified CHI
@@ -429,6 +430,37 @@ func (c *ClickHouseConfigGenerator) GetRemoteServers(options *RemoteServersGener
 			}
 			return nil
 		})
+		// </my_cluster_name>
+		util.Iline(b, 8, "</%s>", clusterName)
+
+		// All Shards
+
+		clusterName = allShardsClusterName
+		util.Iline(b, 8, "<%s>", clusterName)
+
+		c.chi.WalkClusters(func(cluster *chiv1.Cluster) error {
+			cluster.WalkShards(func(index int, shard *chiv1.ChiShard) error {
+				if c.ShardHostsNum(shard, options) < 1 {
+					// Skip empty shard
+					return nil
+				}
+				util.Iline(b, 12, "<shard>")
+				util.Iline(b, 12, "    <internal_replication>%s</internal_replication>", shard.InternalReplication)
+
+				shard.WalkHosts(func(host *chiv1.ChiHost) error {
+					if options.Include(host) {
+						c.getRemoteServersReplica(host, b)
+					}
+					return nil
+				})
+				util.Iline(b, 12, "</shard>")
+
+				return nil
+			})
+
+			return nil
+		})
+
 		// </my_cluster_name>
 		util.Iline(b, 8, "</%s>", clusterName)
 	}
