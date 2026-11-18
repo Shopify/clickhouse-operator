@@ -786,8 +786,8 @@ func (w *worker) reconcileService(ctx context.Context, chi *chiV1.ClickHouseInst
 		return nil
 	}
 
-	w.a.V(2).M(chi).S().Info(service.Name)
-	defer w.a.V(2).M(chi).E().Info(service.Name)
+	w.a.V(2).M(chi).S().Info("%s", service.Name)
+	defer w.a.V(2).M(chi).E().Info("%s", service.Name)
 
 	// Check whether this object already exists
 	curService, err := w.c.getService(service)
@@ -821,8 +821,8 @@ func (w *worker) reconcileSecret(ctx context.Context, chi *chiV1.ClickHouseInsta
 		return nil
 	}
 
-	w.a.V(2).M(chi).S().Info(secret.Name)
-	defer w.a.V(2).M(chi).E().Info(secret.Name)
+	w.a.V(2).M(chi).S().Info("%s", secret.Name)
+	defer w.a.V(2).M(chi).E().Info("%s", secret.Name)
 
 	// Check whether this object already exists
 	if _, err := w.c.getSecret(secret); err == nil {
@@ -853,8 +853,8 @@ func (w *worker) reconcileStatefulSet(ctx context.Context, host *chiV1.ChiHost, 
 
 	newStatefulSet := host.DesiredStatefulSet
 
-	w.a.V(2).M(host).S().Info(util.NamespaceNameString(newStatefulSet.ObjectMeta))
-	defer w.a.V(2).M(host).E().Info(util.NamespaceNameString(newStatefulSet.ObjectMeta))
+	w.a.V(2).M(host).S().Info("%s", util.NamespaceNameString(newStatefulSet.ObjectMeta))
+	defer w.a.V(2).M(host).E().Info("%s", util.NamespaceNameString(newStatefulSet.ObjectMeta))
 
 	if host.GetReconcileAttributes().GetStatus() == chiV1.ObjectStatusSame {
 		defer w.a.V(2).M(host).F().Info("no need to reconcile the same StatefulSet %s", util.NamespaceNameString(newStatefulSet.ObjectMeta))

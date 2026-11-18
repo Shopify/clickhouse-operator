@@ -340,7 +340,7 @@ func (w *worker) canDropReplica(host *chiV1.ChiHost, opts ...*dropReplicaOptions
 		// Replica's state has to be kept in Zookeeper for retained volumes.
 		// ClickHouse expects to have state of the non-empty replica in-place when replica rejoins.
 		if chopModel.GetReclaimPolicy(pvc.ObjectMeta) == chiV1.PVCReclaimPolicyRetain {
-			w.a.V(1).F().Info("PVC %s/%s blocks drop replica. Reclaim policy: %s", chiV1.PVCReclaimPolicyRetain.String())
+			w.a.V(1).F().Info("PVC %s/%s blocks drop replica. Reclaim policy: %s", pvc.Namespace, pvc.Name, chiV1.PVCReclaimPolicyRetain.String())
 			can = false
 		}
 	})
@@ -457,8 +457,8 @@ func (w *worker) deleteHost(ctx context.Context, chi *chiV1.ClickHouseInstallati
 		return nil
 	}
 
-	w.a.V(2).M(host).S().Info(host.Address.HostName)
-	defer w.a.V(2).M(host).E().Info(host.Address.HostName)
+	w.a.V(2).M(host).S().Info("%s", host.Address.HostName)
+	defer w.a.V(2).M(host).E().Info("%s", host.Address.HostName)
 
 	w.a.V(1).
 		WithEvent(host.CHI, eventActionDelete, eventReasonDeleteStarted).
