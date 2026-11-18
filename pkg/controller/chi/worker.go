@@ -1468,8 +1468,8 @@ func (w *worker) createSecret(ctx context.Context, chi *chiV1.ClickHouseInstalla
 
 // getStatefulSetStatus gets StatefulSet status
 func (w *worker) getStatefulSetStatus(meta metaV1.ObjectMeta) chiV1.ObjectStatus {
-	w.a.V(2).M(meta).S().Info(util.NamespaceNameString(meta))
-	defer w.a.V(2).M(meta).E().Info(util.NamespaceNameString(meta))
+	w.a.V(2).M(meta).S().Info("%s", util.NamespaceNameString(meta))
+	defer w.a.V(2).M(meta).E().Info("%s", util.NamespaceNameString(meta))
 
 	curStatefulSet, err := w.c.getStatefulSet(&meta, false)
 	switch {
@@ -1529,8 +1529,8 @@ func (w *worker) createStatefulSet(ctx context.Context, host *chiV1.ChiHost) err
 
 	statefulSet := host.DesiredStatefulSet
 
-	w.a.V(2).M(host).S().Info(util.NamespaceNameString(statefulSet.ObjectMeta))
-	defer w.a.V(2).M(host).E().Info(util.NamespaceNameString(statefulSet.ObjectMeta))
+	w.a.V(2).M(host).S().Info("%s", util.NamespaceNameString(statefulSet.ObjectMeta))
+	defer w.a.V(2).M(host).E().Info("%s", util.NamespaceNameString(statefulSet.ObjectMeta))
 
 	w.a.V(1).
 		WithEvent(host.CHI, eventActionCreate, eventReasonCreateStarted).
@@ -1632,8 +1632,8 @@ func (w *worker) updateStatefulSet(ctx context.Context, host *chiV1.ChiHost) err
 	newStatefulSet := host.DesiredStatefulSet
 	curStatefulSet := host.CurStatefulSet
 
-	w.a.V(2).M(host).S().Info(newStatefulSet.Name)
-	defer w.a.V(2).M(host).E().Info(newStatefulSet.Name)
+	w.a.V(2).M(host).S().Info("%s", newStatefulSet.Name)
+	defer w.a.V(2).M(host).E().Info("%s", newStatefulSet.Name)
 
 	namespace := newStatefulSet.Namespace
 	name := newStatefulSet.Name
@@ -1681,7 +1681,7 @@ func (w *worker) updateStatefulSet(ctx context.Context, host *chiV1.ChiHost) err
 			Info("Update StatefulSet(%s/%s) switch from Update to Recreate", namespace, name)
 		diff, equal := messagediff.DeepDiff(curStatefulSet.Spec, newStatefulSet.Spec)
 		w.a.V(2).M(host).Info("StatefulSet.Spec diff:")
-		w.a.V(2).M(host).Info(util.MessageDiffString(diff, equal))
+		w.a.V(2).M(host).Info("%s", util.MessageDiffString(diff, equal))
 		return w.recreateStatefulSet(ctx, host)
 	case errCRUDUnexpectedFlow:
 		w.a.V(1).M(host).Warning("Got unexpected flow action. Ignore and continue for now")
