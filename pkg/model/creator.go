@@ -254,7 +254,7 @@ func (c *Creator) verifyServiceTemplatePorts(template *chiv1.ChiServiceTemplate)
 		if chiv1.IsPortInvalid(servicePort.Port) {
 			msg := fmt.Sprintf("template:%s INCORRECT PORT:%d", template.Name, servicePort.Port)
 			c.a.V(1).F().Warning(msg)
-			return fmt.Errorf(msg)
+			return fmt.Errorf("%s", msg)
 		}
 	}
 	return nil

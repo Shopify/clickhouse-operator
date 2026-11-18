@@ -128,7 +128,7 @@ func (c *Connection) QueryContext(ctx context.Context, sql string) (*QueryResult
 	if !c.ensureConnected(ctx) {
 		s := fmt.Sprintf("FAILED connect(%s) for SQL: %s", c.params.GetDSNWithHiddenCredentials(), sql)
 		c.l.V(1).F().Error(s)
-		return nil, fmt.Errorf(s)
+		return nil, fmt.Errorf("%s", s)
 	}
 
 	if util.IsContextDone(ctx) {
@@ -184,7 +184,7 @@ func (c *Connection) Exec(_ctx context.Context, sql string, opts *QueryOptions) 
 		cancel()
 		s := fmt.Sprintf("FAILED connect(%s) for SQL: %s", c.params.GetDSNWithHiddenCredentials(), sql)
 		c.l.V(1).F().Error(s)
-		return fmt.Errorf(s)
+		return fmt.Errorf("%s", s)
 	}
 
 	_, err := c.db.ExecContext(ctx, sql)
