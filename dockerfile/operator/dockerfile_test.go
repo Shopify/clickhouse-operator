@@ -125,13 +125,16 @@ func checkNoMutableReleases(ins []instruction) []string {
 }
 
 var (
-	downloadPattern = regexp.MustCompile(`(?:^|[\s;&|(])(?:wget|curl)\s`)
+	// downloadPattern matches wget or curl in a command position: at the start,
+	// or after a shell operator, with optional VAR=value prefixes. It does not
+	// match a package name such as "apt-get install -y wget".
+	downloadPattern = regexp.MustCompile(`(?:^|&&|\|\||[;|(])\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:wget|curl)\s`)
 	verifyPattern   = regexp.MustCompile(`\bsha256sum\s+(?:-c|--check)\b`)
 	remoteAdd       = regexp.MustCompile(`(?i)\bhttps?://`)
 )
 
-// checkDownloadsVerified reports each RUN that downloads more files than
-// it verifies with "sha256sum -c", and each ADD of a URL without --checksum.
+// checkDownloadsVerified reports each RUN that runs wget or curl more times
+// than it verifies a file with "sha256sum -c", and each ADD of a URL without --checksum.
 func checkDownloadsVerified(ins []instruction) []string {
 	var violations []string
 	for _, in := range ins {
@@ -251,6 +254,40 @@ func TestOperatorDockerfile_ChecksRejectUnsafeInputs(t *testing.T) {
 			check: "platform args declared",
 			src:   "FROM golang AS a\nARG TARGETARCH\nFROM golang AS b\nRUN echo $TARGETARCH\n",
 			want:  1,
+		},
+		{
+			name:  "braced target arguments not declared in stage",
+			check: "platform args declared",
+			src:   "FROM golang AS delve-builder\nRUN GOOS=\"${TARGETOS}\" GOARCH=\"${TARGETARCH}\" go build ./...\n",
+			want:  2,
+		},
+		// Safe inputs. Each check must accept them.
+		{
+			name:  "pinned image and earlier stage",
+			check: "images pinned by digest",
+			src: "FROM golang:1.26.11@sha256:" + strings.Repeat("b", 64) + " AS image-base-amd64\n" +
+				"FROM golang:1.26.11@sha256:" + strings.Repeat("c", 64) + " AS image-base-arm64\n" +
+				"FROM image-base-${TARGETARCH} AS image-base\nFROM image-base AS image-prod\n",
+			want: 0,
+		},
+		{
+			name:  "go install of exact version",
+			check: "no mutable releases",
+			src:   "FROM scratch\nRUN go install github.com/go-delve/delve/cmd/dlv@v1.27.2\n",
+			want:  0,
+		},
+		{
+			name:  "verified download and apt package names",
+			check: "downloads verified",
+			src: "FROM scratch\nRUN apt-get install -y wget curl ca-certificates\n" +
+				"RUN URL=https://example.com/a && wget -O /tmp/a \"${URL}\" && \\\n    echo \"x  /tmp/a\" | sha256sum -c -\n",
+			want: 0,
+		},
+		{
+			name:  "argument declared before use",
+			check: "platform args declared",
+			src:   "FROM golang AS a\nARG TARGETOS\nARG TARGETARCH\nRUN GOOS=\"${TARGETOS}\" GOARCH=$TARGETARCH go build ./...\n",
+			want:  0,
 		},
 	}
 	for _, tt := range tests {

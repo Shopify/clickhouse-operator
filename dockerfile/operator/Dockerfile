@@ -2,8 +2,16 @@
 # ===== Builder =====
 # ===================
 
-# External images are pinned by digest. To update an image, resolve the
-# digest of the new tag and replace the tag and the digest together.
+# All external inputs of this build are pinned. dockerfile_test.go checks this.
+# To update an input:
+# - Image: resolve the digest of the new tag. Replace the tag and the digest
+#   together. Change both golang FROM lines.
+# - yq: copy the SHA-256 values from the "checksums" asset of the release.
+# - static-curl: copy the SHA-256 values from the GPG-signed sha256sum.txt
+#   of the release, after you verify its signature.
+# - bash-static: the release publishes no checksums. Download each asset and
+#   compute its SHA-256.
+# - Delve: change the version. The Go checksum database verifies the module.
 FROM --platform=${BUILDPLATFORM} golang:1.26.11@sha256:4165ee6bf3b7811fd7b40373290405c83d0167dcb87ee5f29c427cdcef45ff8f AS builder
 
 ARG BUILDARCH
@@ -21,13 +29,15 @@ RUN apt-get update && \
 # External tools are pinned to a release and verified with SHA-256 before use.
 # yq runs on the build host to generate manifests, so it uses BUILDARCH.
 # Source: https://github.com/mikefarah/yq/releases/download/v4.54.3/checksums
-RUN case "${BUILDARCH}" in \
+RUN URL="https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_${BUILDARCH}" && \
+    case "${BUILDARCH}" in \
       amd64) SHA256="129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973" ;; \
       arm64) SHA256="89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67" ;; \
       *) echo "Unsupported build architecture: ${BUILDARCH}" >&2; exit 1 ;; \
     esac && \
-    wget -O /tmp/yq --progress=bar:force:noscroll "https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_${BUILDARCH}" && \
-    echo "${SHA256}  /tmp/yq" | sha256sum -c - && \
+    wget -O /tmp/yq --progress=bar:force:noscroll "${URL}" && \
+    { echo "${SHA256}  /tmp/yq" | sha256sum -c - || \
+      { echo "Checksum mismatch for ${URL}: expected ${SHA256}, got $(sha256sum /tmp/yq)" >&2; exit 1; }; } && \
     install -m 0755 /tmp/yq /usr/bin/yq && rm /tmp/yq && \
     yq --version
 
@@ -39,12 +49,16 @@ RUN case "${TARGETARCH}" in \
       arm64) PLATFORM="aarch64"; SHA256="8877ad33344af461ed801066322fd9a7808cd73e4e81087da228e32e8fad54ca" ;; \
       *) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
-    wget -O /tmp/bash --progress=bar:force:noscroll "https://github.com/robxu9/bash-static/releases/download/5.2.015-1.2.3-2/bash-linux-${PLATFORM}" && \
-    echo "${SHA256}  /tmp/bash" | sha256sum -c - && \
+    URL="https://github.com/robxu9/bash-static/releases/download/5.2.015-1.2.3-2/bash-linux-${PLATFORM}" && \
+    wget -O /tmp/bash --progress=bar:force:noscroll "${URL}" && \
+    { echo "${SHA256}  /tmp/bash" | sha256sum -c - || \
+      { echo "Checksum mismatch for ${URL}: expected ${SHA256}, got $(sha256sum /tmp/bash)" >&2; exit 1; }; } && \
     chmod +x /tmp/bash
 
 # static-curl stopped publishing an aarch64 binary after v8.11.0, so arm64
-# uses v8.11.0. Source: the GPG-signed sha256sum.txt of each release.
+# uses v8.11.0. Later curl releases fix CVEs in v8.11.0. Replace this source
+# when a maintained aarch64 static curl is available.
+# Source: the GPG-signed sha256sum.txt of each release.
 RUN case "${TARGETARCH}" in \
       amd64) URL="https://github.com/moparisthebest/static-curl/releases/download/v8.21.0/curl-amd64"; \
              SHA256="e45ae1805ceb3f816e9768fbbaba05d98a2dc9c5577f66395f37660941d88e19" ;; \
@@ -53,12 +67,18 @@ RUN case "${TARGETARCH}" in \
       *) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
     wget -O /tmp/curl --progress=bar:force:noscroll "${URL}" && \
-    echo "${SHA256}  /tmp/curl" | sha256sum -c - && \
+    { echo "${SHA256}  /tmp/curl" | sha256sum -c - || \
+      { echo "Checksum mismatch for ${URL}: expected ${SHA256}, got $(sha256sum /tmp/curl)" >&2; exit 1; }; } && \
     chmod +x /tmp/curl
 
 # Reconstruct source tree inside docker
 WORKDIR /clickhouse-operator
 ADD . .
+
+# Fail the build if this Dockerfile uses an unpinned or unverified input.
+# This runs before GOOS and GOARCH are set, so the test runs on the build host.
+RUN go test ./dockerfile/operator/
+
 ENV GCFLAGS="${GCFLAGS}"
 ENV GOOS="${TARGETOS}"
 ENV GOARCH="${TARGETARCH}"
@@ -79,6 +99,7 @@ RUN CGO_ENABLED=0 GO111MODULE=on GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
     GOSUMDB=sum.golang.org GOTOOLCHAIN=local \
     go install -ldflags "-s -w -extldflags '-static'" github.com/go-delve/delve/cmd/dlv@v1.27.2 && \
     if [ -f "/go/bin/${TARGETOS}_${TARGETARCH}/dlv" ]; then mv "/go/bin/${TARGETOS}_${TARGETARCH}/dlv" /go/bin/dlv; fi && \
+    test -x /go/bin/dlv && \
     rm -rf /root/.cache/go-build/ /go/pkg/mod/
 
 # ======================
